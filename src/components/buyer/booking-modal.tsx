@@ -64,7 +64,10 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
       });
 
       if (!calResult.success) {
-        throw new Error(calResult.error || 'Failed to create calendar event. The seller may need to grant calendar permissions.');
+        if (calResult.error?.includes('Access token not found')) {
+            throw new Error(`This seller has not connected their calendar yet. Please contact them to enable bookings.`);
+        }
+        throw new Error(calResult.error || 'Failed to create calendar event.');
       }
 
       // Step 2: Update the slot document in Firestore to mark it as booked
