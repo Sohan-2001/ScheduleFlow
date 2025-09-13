@@ -18,4 +18,5 @@ export type TimeSlot = {
   endTime: string;
   status: 'available' | 'booked';
   bookedBy?: string; // e.g. buyer's email or ID
+  bookedAt?: string; // ISO string
 };

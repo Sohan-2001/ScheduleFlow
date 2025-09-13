@@ -7,6 +7,7 @@ import { CalendarCheck, Clock, CheckCircle } from 'lucide-react';
 import type { Seller, TimeSlot } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '../ui/scroll-area';
+import { useAuth } from '@/providers/auth-provider';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -16,12 +17,18 @@ interface BookingModalProps {
 
 export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [availability, setAvailability] = useLocalStorage<Record<string, TimeSlot[]>>('schedule-flow-availability', {});
   const sellerAvailability = availability[seller.id] || [];
 
   const handleBookSlot = (slotId: string) => {
     const updatedAvailability = sellerAvailability.map(slot =>
-      slot.id === slotId ? { ...slot, status: 'booked' as const } : slot
+      slot.id === slotId ? { 
+        ...slot, 
+        status: 'booked' as const,
+        bookedBy: user?.email || 'Unknown User',
+        bookedAt: new Date().toISOString(),
+      } : slot
     );
     setAvailability(prev => ({ ...prev, [seller.id]: updatedAvailability }));
 
@@ -62,7 +69,7 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
                         {format(new Date(slot.startTime), 'p')} - {format(new Date(slot.endTime), 'p')}
                     </p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => handleBookSlot(slot.id)}>
+                  <Button variant="outline" size="sm" onClick={() => handleBookSlot(slot.id)} disabled={!user}>
                     <CheckCircle className="mr-2 h-4 w-4" />
                     Book
                   </Button>

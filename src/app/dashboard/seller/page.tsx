@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
-import { add, format, set } from 'date-fns';
-import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock } from 'lucide-react';
+import { add, format, set, formatRelative } from 'date-fns';
+import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info } from 'lucide-react';
 import type { TimeSlot } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
@@ -79,6 +79,8 @@ export default function SellerDashboardPage() {
     });
   };
 
+  const upcomingSlots = sellerAvailability.filter(slot => new Date(slot.startTime) >= new Date());
+
   return (
     <div className="container py-8">
       <div className="mb-8">
@@ -128,26 +130,43 @@ export default function SellerDashboardPage() {
               <CardDescription>Here are your currently available and booked time slots.</CardDescription>
             </CardHeader>
             <CardContent>
-              {sellerAvailability.length > 0 ? (
-                <ul className="space-y-2">
-                  {sellerAvailability.map((slot) => (
-                    <li key={slot.id} className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <p className="font-semibold flex items-center gap-2">
-                           <CalendarIcon className="h-4 w-4 text-muted-foreground" />
-                           {format(new Date(slot.startTime), 'PPP')}
-                        </p>
-                        <p className="text-sm text-muted-foreground flex items-center gap-2">
-                          <Clock className="h-4 w-4" />
-                          {format(new Date(slot.startTime), 'p')} - {format(new Date(slot.endTime), 'p')}
-                        </p>
-                         <p className={`text-sm font-medium ${slot.status === 'booked' ? 'text-red-500' : 'text-green-600'}`}>
-                           Status: {slot.status}
-                         </p>
+              {upcomingSlots.length > 0 ? (
+                <ul className="space-y-3">
+                  {upcomingSlots.map((slot) => (
+                    <li key={slot.id} className={`rounded-lg border p-4 ${slot.status === 'booked' ? 'bg-muted' : ''}`}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold flex items-center gap-2">
+                            <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+                            {format(new Date(slot.startTime), 'PPP')}
+                          </p>
+                          <p className="text-sm text-muted-foreground flex items-center gap-2">
+                            <Clock className="h-4 w-4" />
+                            {format(new Date(slot.startTime), 'p')} - {format(new Date(slot.endTime), 'p')}
+                          </p>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => removeSlot(slot.id)} disabled={slot.status === 'booked'}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => removeSlot(slot.id)} disabled={slot.status === 'booked'}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {slot.status === 'booked' && (
+                        <div className="mt-3 pt-3 border-t">
+                            <p className="text-sm font-semibold flex items-center gap-2 text-primary">
+                                <Info className="h-4 w-4" />
+                                Booking Details
+                            </p>
+                            <p className="text-sm text-muted-foreground flex items-center gap-2 pl-6">
+                                <User className="h-4 w-4" />
+                                Booked by: {slot.bookedBy}
+                            </p>
+                            {slot.bookedAt && (
+                                <p className="text-sm text-muted-foreground flex items-center gap-2 pl-6">
+                                    <Clock className="h-4 w-4" />
+                                    Booked on: {format(new Date(slot.bookedAt), 'PPP p')}
+                                </p>
+                            )}
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
