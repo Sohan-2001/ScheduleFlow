@@ -1,6 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { useLocalStorage } from '@/hooks/use-local-storage';
+import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
@@ -11,7 +10,7 @@ import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info, Edit }
 import type { Seller, TimeSlot } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/providers/auth-provider';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, onSnapshot, writeBatch, Unsubscribe } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 
@@ -19,32 +18,54 @@ export default function SellerDashboardPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const router = useRouter();
-  const [availability, setAvailability] = useLocalStorage<Record<string, TimeSlot[]>>('schedule-flow-availability', {});
+  
+  const [availability, setAvailability] = useState<TimeSlot[]>([]);
   const [sellerDetails, setSellerDetails] = useState<Seller | null>(null);
-  
-  const sellerId = user?.uid;
-  const sellerAvailability = sellerId ? availability[sellerId] || [] : [];
-  
+  const [loading, setLoading] = useState(true);
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
   const [slotDuration, setSlotDuration] = useState(30);
 
   useEffect(() => {
-    const fetchSellerDetails = async () => {
-      if (user) {
-        const sellerDocRef = doc(db, 'sellers', user.uid);
-        const docSnap = await getDoc(sellerDocRef);
-        if (docSnap.exists()) {
-          setSellerDetails({ id: docSnap.id, ...docSnap.data() } as Seller);
-        }
+    if (!user) return;
+    
+    let unsubscribe: Unsubscribe | undefined;
+
+    const fetchSellerAndAvailability = async () => {
+      setLoading(true);
+      const sellerDocRef = doc(db, 'sellers', user.uid);
+      const sellerDocSnap = await getDoc(sellerDocRef);
+
+      if (sellerDocSnap.exists()) {
+        setSellerDetails({ id: sellerDocSnap.id, ...sellerDocSnap.data() } as Seller);
+      }
+      
+      const availabilityCollectionRef = collection(db, 'sellers', user.uid, 'availability');
+      unsubscribe = onSnapshot(availabilityCollectionRef, (snapshot) => {
+        const slots = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeSlot));
+        slots.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+        setAvailability(slots);
+        setLoading(false);
+      }, (error) => {
+        console.error("Error fetching availability:", error);
+        toast({ title: "Error", description: "Could not fetch availability.", variant: "destructive" });
+        setLoading(false);
+      });
+    };
+
+    fetchSellerAndAvailability();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
       }
     };
-    fetchSellerDetails();
-  }, [user]);
+  }, [user, toast]);
 
-  const generateSlots = () => {
-    if (!selectedDate || !startTime || !endTime || !sellerId) {
+  const generateSlots = async () => {
+    if (!selectedDate || !startTime || !endTime || !user) {
       toast({
         title: 'Error',
         description: 'Please select a date and start/end times.',
@@ -52,74 +73,86 @@ export default function SellerDashboardPage() {
       });
       return;
     }
-  
-    setAvailability(prev => {
-      const currentSellerSlots = prev[sellerId] || [];
-      const existingStartTimes = new Set(currentSellerSlots.map(slot => new Date(slot.startTime).getTime()));
-      const newSlots: TimeSlot[] = [];
-  
-      let currentTime = set(selectedDate, {
-        hours: parseInt(startTime.split(':')[0]),
-        minutes: parseInt(startTime.split(':')[1]),
-        seconds: 0,
-        milliseconds: 0,
-      });
+
+    const newSlots: Omit<TimeSlot, 'id'>[] = [];
+    const existingStartTimes = new Set(availability.map(slot => new Date(slot.startTime).getTime()));
+
+    let currentTime = set(selectedDate, {
+      hours: parseInt(startTime.split(':')[0]),
+      minutes: parseInt(startTime.split(':')[1]),
+      seconds: 0,
+      milliseconds: 0,
+    });
+    
+    const endDateTime = set(selectedDate, {
+      hours: parseInt(endTime.split(':')[0]),
+      minutes: parseInt(endTime.split(':')[1]),
+    });
+
+    while (currentTime < endDateTime) {
+      const slotEndTime = add(currentTime, { minutes: slotDuration });
+      if (slotEndTime > endDateTime) break;
+
+      const newSlot = {
+        startTime: currentTime.toISOString(),
+        endTime: slotEndTime.toISOString(),
+        status: 'available' as const,
+      };
       
-      const endDateTime = set(selectedDate, {
-        hours: parseInt(endTime.split(':')[0]),
-        minutes: parseInt(endTime.split(':')[1]),
-      });
-  
-      while (currentTime < endDateTime) {
-        const slotEndTime = add(currentTime, { minutes: slotDuration });
-        if (slotEndTime > endDateTime) break;
-  
-        const newSlot: TimeSlot = {
-          id: `${sellerId}-${currentTime.toISOString()}`,
-          startTime: currentTime.toISOString(),
-          endTime: slotEndTime.toISOString(),
-          status: 'available',
-        };
-        
-        if (!existingStartTimes.has(new Date(newSlot.startTime).getTime())) {
-            newSlots.push(newSlot);
-        }
-  
-        currentTime = slotEndTime;
+      if (!existingStartTimes.has(new Date(newSlot.startTime).getTime())) {
+          newSlots.push(newSlot);
       }
+
+      currentTime = slotEndTime;
+    }
+    
+    if (newSlots.length === 0) {
+      toast({
+        title: 'No new slots added.',
+        description: `The slots for ${format(selectedDate, 'PPP')} in this time range might already exist.`,
+      });
+      return;
+    }
+
+    try {
+      const batch = writeBatch(db);
+      const availabilityCollectionRef = collection(db, 'sellers', user.uid, 'availability');
+      newSlots.forEach(slotData => {
+        const slotId = `${user.uid}-${slotData.startTime}`;
+        const slotDocRef = doc(availabilityCollectionRef, slotId);
+        batch.set(slotDocRef, slotData);
+      });
+      await batch.commit();
       
-      if (newSlots.length === 0) {
-        toast({
-          title: 'No new slots added.',
-          description: `The slots for ${format(selectedDate, 'PPP')} in this time range might already exist.`,
-        });
-        return prev;
-      }
-      
-      const updatedSlots = [...currentSellerSlots, ...newSlots].sort(
-        (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-      );
-  
       toast({
         title: 'Success!',
         description: `${newSlots.length} new slots added for ${format(selectedDate, 'PPP')}.`,
       });
-  
-      return { ...prev, [sellerId]: updatedSlots };
-    });
+    } catch (error) {
+      console.error("Error adding slots:", error);
+      toast({ title: "Error", description: "Could not save new slots.", variant: "destructive" });
+    }
   };
   
-  const removeSlot = (slotId: string) => {
-    if (!sellerId) return;
-    const updatedAvailability = sellerAvailability.filter(slot => slot.id !== slotId);
-    setAvailability(prev => ({ ...prev, [sellerId]: updatedAvailability }));
-    toast({
-      title: 'Slot Removed',
-      description: 'The time slot has been removed from your availability.',
-    });
+  const removeSlot = async (slotId: string) => {
+    if (!user) return;
+    try {
+      const slotDocRef = doc(db, 'sellers', user.uid, 'availability', slotId);
+      const batch = writeBatch(db);
+      batch.delete(slotDocRef);
+      await batch.commit();
+
+      toast({
+        title: 'Slot Removed',
+        description: 'The time slot has been removed from your availability.',
+      });
+    } catch (error) {
+      console.error("Error removing slot:", error);
+      toast({ title: "Error", description: "Could not remove the slot.", variant: "destructive" });
+    }
   };
 
-  const upcomingSlots = sellerAvailability.filter(slot => new Date(slot.startTime) >= new Date());
+  const upcomingSlots = availability.filter(slot => new Date(slot.startTime) >= new Date());
 
   return (
     <div className="container py-8">
@@ -187,7 +220,9 @@ export default function SellerDashboardPage() {
               <CardDescription>Here are your currently available and booked time slots.</CardDescription>
             </CardHeader>
             <CardContent>
-              {upcomingSlots.length > 0 ? (
+              {loading ? (
+                <p className="text-center text-muted-foreground py-8">Loading availability...</p>
+              ) : upcomingSlots.length > 0 ? (
                 <ul className="space-y-3">
                   {upcomingSlots.map((slot) => (
                     <li key={slot.id} className={`rounded-lg border p-4 ${slot.status === 'booked' ? 'bg-muted' : ''}`}>

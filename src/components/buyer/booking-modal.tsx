@@ -1,7 +1,6 @@
 'use client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useLocalStorage } from '@/hooks/use-local-storage';
 import { format } from 'date-fns';
 import { CalendarCheck, Clock, CheckCircle, Loader2 } from 'lucide-react';
 import type { Seller, TimeSlot } from '@/lib/types';
@@ -9,7 +8,9 @@ import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '../ui/scroll-area';
 import { useAuth } from '@/providers/auth-provider';
 import { scheduleEvent } from '@/app/actions';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { collection, doc, onSnapshot, writeBatch, Unsubscribe } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -20,9 +21,28 @@ interface BookingModalProps {
 export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [availability, setAvailability] = useLocalStorage<Record<string, TimeSlot[]>>('schedule-flow-availability', {});
+  const [availability, setAvailability] = useState<TimeSlot[]>([]);
+  const [loading, setLoading] = useState(true);
   const [bookingSlotId, setBookingSlotId] = useState<string | null>(null);
-  const sellerAvailability = availability[seller.id] || [];
+
+  useEffect(() => {
+    if (!isOpen || !seller) return;
+
+    setLoading(true);
+    const availabilityCollectionRef = collection(db, 'sellers', seller.id, 'availability');
+    const unsubscribe = onSnapshot(availabilityCollectionRef, (snapshot) => {
+      const slots = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TimeSlot));
+      slots.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      setAvailability(slots);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching availability:", error);
+      toast({ title: "Error", description: "Could not fetch seller's availability.", variant: "destructive" });
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [isOpen, seller, toast]);
 
   const handleBookSlot = async (slot: TimeSlot) => {
     if (!user || !user.email) {
@@ -34,7 +54,7 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
 
     try {
       // Step 1: Create the Google Calendar event
-      const result = await scheduleEvent({
+      const calResult = await scheduleEvent({
         sellerId: seller.id,
         buyerEmail: user.email,
         slot: {
@@ -43,20 +63,20 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
         },
       });
 
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to create calendar event.');
+      if (!calResult.success) {
+        throw new Error(calResult.error || 'Failed to create calendar event.');
       }
 
-      // Step 2: Update the local state to reflect the booking
-      const updatedAvailability = sellerAvailability.map(s =>
-        s.id === slot.id ? {
-          ...s,
-          status: 'booked' as const,
+      // Step 2: Update the slot document in Firestore
+      const slotDocRef = doc(db, 'sellers', seller.id, 'availability', slot.id);
+      const batch = writeBatch(db);
+      batch.update(slotDocRef, {
+          status: 'booked',
           bookedBy: user.email,
           bookedAt: new Date().toISOString(),
-        } : s
-      );
-      setAvailability(prev => ({ ...prev, [seller.id]: updatedAvailability }));
+      });
+      await batch.commit();
+
 
       // Step 3: Notify the user
       toast({
@@ -79,7 +99,7 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
     }
   };
 
-  const availableSlots = sellerAvailability.filter(slot => slot.status === 'available');
+  const availableSlots = availability.filter(slot => slot.status === 'available' && new Date(slot.startTime) > new Date());
   const isBooking = bookingSlotId !== null;
 
   return (
@@ -92,7 +112,12 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[60vh] pr-4">
-            {availableSlots.length > 0 ? (
+            {loading ? (
+              <div className="flex flex-col items-center justify-center text-center text-muted-foreground py-10">
+                <Loader2 className="h-12 w-12 mb-4 animate-spin" />
+                <p className="font-semibold">Loading availability...</p>
+              </div>
+            ) : availableSlots.length > 0 ? (
             <div className="space-y-2 py-4">
               {availableSlots.map(slot => (
                 <div key={slot.id} className="flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-secondary">
