@@ -3,11 +3,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { format } from 'date-fns';
-import { CalendarCheck, Clock, CheckCircle } from 'lucide-react';
+import { CalendarCheck, Clock, CheckCircle, Loader2 } from 'lucide-react';
 import type { Seller, TimeSlot } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '../ui/scroll-area';
 import { useAuth } from '@/providers/auth-provider';
+import { scheduleEvent } from '@/app/actions';
+import { useState } from 'react';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -19,31 +21,66 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
   const { toast } = useToast();
   const { user } = useAuth();
   const [availability, setAvailability] = useLocalStorage<Record<string, TimeSlot[]>>('schedule-flow-availability', {});
+  const [bookingSlotId, setBookingSlotId] = useState<string | null>(null);
   const sellerAvailability = availability[seller.id] || [];
 
-  const handleBookSlot = (slotId: string) => {
-    const updatedAvailability = sellerAvailability.map(slot =>
-      slot.id === slotId ? { 
-        ...slot, 
-        status: 'booked' as const,
-        bookedBy: user?.email || 'Unknown User',
-        bookedAt: new Date().toISOString(),
-      } : slot
-    );
-    setAvailability(prev => ({ ...prev, [seller.id]: updatedAvailability }));
+  const handleBookSlot = async (slot: TimeSlot) => {
+    if (!user || !user.email) {
+      toast({ title: 'Error', description: 'You must be logged in to book.', variant: 'destructive' });
+      return;
+    }
 
-    const bookedSlot = sellerAvailability.find(s => s.id === slotId);
-    if (bookedSlot) {
+    setBookingSlotId(slot.id);
+
+    try {
+      // Step 1: Create the Google Calendar event
+      const result = await scheduleEvent({
+        sellerId: seller.id,
+        buyerEmail: user.email,
+        slot: {
+          startTime: slot.startTime,
+          endTime: slot.endTime,
+        },
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to create calendar event.');
+      }
+
+      // Step 2: Update the local state to reflect the booking
+      const updatedAvailability = sellerAvailability.map(s =>
+        s.id === slot.id ? {
+          ...s,
+          status: 'booked' as const,
+          bookedBy: user.email,
+          bookedAt: new Date().toISOString(),
+        } : s
+      );
+      setAvailability(prev => ({ ...prev, [seller.id]: updatedAvailability }));
+
+      // Step 3: Notify the user
       toast({
         title: 'Appointment Booked!',
-        description: `Your appointment with ${seller.name} on ${format(new Date(bookedSlot.startTime), 'PPP')} at ${format(new Date(bookedSlot.startTime), 'p')} is confirmed.`,
+        description: `Your appointment with ${seller.name} is confirmed. An event has been added to your Google Calendar.`,
         className: 'bg-green-100 dark:bg-green-900 border-green-400 dark:border-green-600',
       });
+
+      setIsOpen(false);
+
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        title: 'Booking Failed',
+        description: error.message || 'Could not book the appointment. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setBookingSlotId(null);
     }
-    setIsOpen(false);
   };
-  
+
   const availableSlots = sellerAvailability.filter(slot => slot.status === 'available');
+  const isBooking = bookingSlotId !== null;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -69,8 +106,17 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
                         {format(new Date(slot.startTime), 'p')} - {format(new Date(slot.endTime), 'p')}
                     </p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => handleBookSlot(slot.id)} disabled={!user}>
-                    <CheckCircle className="mr-2 h-4 w-4" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleBookSlot(slot)}
+                    disabled={!user || isBooking}
+                  >
+                    {bookingSlotId === slot.id ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <CheckCircle className="mr-2 h-4 w-4" />
+                    )}
                     Book
                   </Button>
                 </div>
