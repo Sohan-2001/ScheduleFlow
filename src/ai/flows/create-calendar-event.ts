@@ -7,7 +7,7 @@ import { z } from 'genkit';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
-export const CreateCalendarEventInputSchema = z.object({
+const CreateCalendarEventInputSchema = z.object({
   sellerId: z.string().describe('The ID of the seller.'),
   buyerEmail: z.string().email().describe("The buyer's email address."),
   slot: z.object({
