@@ -66,17 +66,33 @@ export default function SellerDashboardPage() {
       minutes: parseInt(endTime.split(':')[1]),
     });
 
+    const existingStartTimes = new Set(sellerAvailability.map(slot => new Date(slot.startTime).getTime()));
+
     while (currentTime < endDateTime) {
       const slotEndTime = add(currentTime, { minutes: slotDuration });
       if (slotEndTime > endDateTime) break;
 
-      newSlots.push({
+      const newSlot: TimeSlot = {
         id: `${sellerId}-${currentTime.toISOString()}`,
         startTime: currentTime.toISOString(),
         endTime: slotEndTime.toISOString(),
         status: 'available',
-      });
+      };
+      
+      // Only add slot if it doesn't already exist
+      if (!existingStartTimes.has(new Date(newSlot.startTime).getTime())) {
+          newSlots.push(newSlot);
+      }
+
       currentTime = slotEndTime;
+    }
+    
+    if (newSlots.length === 0) {
+      toast({
+        title: 'No new slots added.',
+        description: `The slots for ${format(selectedDate, 'PPP')} in this time range already exist.`,
+      });
+      return;
     }
 
     const updatedAvailability = [...sellerAvailability, ...newSlots].sort(
@@ -86,7 +102,7 @@ export default function SellerDashboardPage() {
     setAvailability(prev => ({ ...prev, [sellerId]: updatedAvailability }));
     toast({
       title: 'Success!',
-      description: `${newSlots.length} slots added for ${format(selectedDate, 'PPP')}.`,
+      description: `${newSlots.length} new slots added for ${format(selectedDate, 'PPP')}.`,
     });
   };
   
