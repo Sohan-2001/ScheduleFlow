@@ -1,31 +1,59 @@
+
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
-import { add, format, set, formatRelative } from 'date-fns';
-import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info, Briefcase, FileText, UserCircle } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { add, format, set } from 'date-fns';
+import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info, Save } from 'lucide-react';
 import type { Seller, TimeSlot } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/providers/auth-provider';
-import { sellers } from '@/lib/data';
 
 export default function SellerDashboardPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [availability, setAvailability] = useLocalStorage<Record<string, TimeSlot[]>>('schedule-flow-availability', {});
+  const [sellers, setSellers] = useLocalStorage<Seller[]>('schedule-flow-sellers', []);
   
-  // Find the seller details that match the logged-in user's ID
-  const sellerDetails = sellers.find(s => s.id === user?.uid);
-  const sellerId = sellerDetails?.id || user?.uid;
+  const sellerId = user?.uid;
+  const sellerDetails = sellers.find(s => s.id === sellerId);
   const sellerAvailability = sellerId ? availability[sellerId] || [] : [];
   
+  const [name, setName] = useState(sellerDetails?.name || '');
+  const [title, setTitle] = useState(sellerDetails?.title || '');
+  const [description, setDescription] = useState(sellerDetails?.description || '');
+
+  useEffect(() => {
+    if (sellerDetails) {
+      setName(sellerDetails.name);
+      setTitle(sellerDetails.title);
+      setDescription(sellerDetails.description);
+    }
+  }, [sellerDetails]);
+
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
   const [slotDuration, setSlotDuration] = useState(30);
+
+  const handleProfileSave = () => {
+    if (!sellerId) return;
+
+    const updatedSellers = sellers.map(s => 
+      s.id === sellerId ? { ...s, name, title, description } : s
+    );
+    setSellers(updatedSellers);
+
+    toast({
+      title: 'Profile Updated',
+      description: 'Your details have been saved successfully.',
+    });
+  };
 
   const generateSlots = () => {
     if (!selectedDate || !startTime || !endTime || !sellerId) {
@@ -90,41 +118,42 @@ export default function SellerDashboardPage() {
     <div className="container py-8">
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Seller Dashboard</h1>
-        <p className="text-muted-foreground">Manage your schedule and availability.</p>
+        <p className="text-muted-foreground">Manage your profile and availability.</p>
       </div>
 
-      {sellerDetails && (
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Your Profile</CardTitle>
-            <CardDescription>This is how buyers see you on the platform.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-4">
-                <UserCircle className="h-6 w-6 text-muted-foreground" />
-                <p><span className="font-semibold">Name:</span> {sellerDetails.name}</p>
-            </div>
-            <div className="flex items-center gap-4">
-                <Briefcase className="h-6 w-6 text-muted-foreground" />
-                <p><span className="font-semibold">Title:</span> {sellerDetails.title}</p>
-            </div>
-            <div className="flex items-start gap-4">
-                <FileText className="h-6 w-6 text-muted-foreground flex-shrink-0" />
-                <div>
-                    <p className="font-semibold">Description:</p>
-                    <p className="text-muted-foreground">{sellerDetails.description}</p>
-                </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-        <div className="md:col-span-1">
+        <div className="space-y-8 md:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle>Edit Your Profile</CardTitle>
+              <CardDescription>Update your public information.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+               <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your Name" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="title">Title / Category</Label>
+                <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Dentist, Financial Advisor" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Tell buyers about your services" rows={4} />
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button onClick={handleProfileSave} className="w-full">
+                <Save className="mr-2 h-4 w-4" />
+                Save Profile
+              </Button>
+            </CardFooter>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Add Availability</CardTitle>
-              <CardDescription>Select a day and times to add new slots.</CardDescription>
+              <CardDescription>Add new time slots for buyers to book.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <Calendar
@@ -135,7 +164,7 @@ export default function SellerDashboardPage() {
                 disabled={(date) => date < new Date(new Date().toDateString())}
               />
               <div className="space-y-2">
-                <label className="text-sm font-medium">Time Range</label>
+                <Label>Time Range</Label>
                 <div className="flex items-center gap-2">
                   <Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} />
                   <span>to</span>
@@ -143,7 +172,7 @@ export default function SellerDashboardPage() {
                 </div>
               </div>
               <div className="space-y-2">
-                 <label className="text-sm font-medium">Slot Duration (minutes)</label>
+                 <Label>Slot Duration (minutes)</Label>
                  <Input type="number" value={slotDuration} onChange={e => setSlotDuration(parseInt(e.target.value))} min="15" step="15" />
               </div>
               <Button onClick={generateSlots} className="w-full">
@@ -211,3 +240,5 @@ export default function SellerDashboardPage() {
     </div>
   );
 }
+
+    
