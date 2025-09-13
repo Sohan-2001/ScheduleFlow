@@ -32,7 +32,9 @@ export function SignUp() {
     setLoading(true);
     try {
       await createUserWithEmailAndPassword(auth, email, password);
-      // The redirect to /select-role is handled by the AuthProvider
+      // The redirect to /select-role is handled by the AuthProvider,
+      // but we can push it here to make it faster.
+      router.push('/select-role');
     } catch (error: any) {
       toast({
         title: 'Sign Up Failed',
