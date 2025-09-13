@@ -3,13 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/use-local-storage';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { add, format, set } from 'date-fns';
-import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info, Save } from 'lucide-react';
+import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info } from 'lucide-react';
 import type { Seller, TimeSlot } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/providers/auth-provider';
@@ -18,42 +17,16 @@ export default function SellerDashboardPage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [availability, setAvailability] = useLocalStorage<Record<string, TimeSlot[]>>('schedule-flow-availability', {});
-  const [sellers, setSellers] = useLocalStorage<Seller[]>('schedule-flow-sellers', []);
+  const [sellers] = useLocalStorage<Seller[]>('schedule-flow-sellers', []);
   
   const sellerId = user?.uid;
   const sellerDetails = sellers.find(s => s.id === sellerId);
   const sellerAvailability = sellerId ? availability[sellerId] || [] : [];
   
-  const [name, setName] = useState(sellerDetails?.name || '');
-  const [title, setTitle] = useState(sellerDetails?.title || '');
-  const [description, setDescription] = useState(sellerDetails?.description || '');
-
-  useEffect(() => {
-    if (sellerDetails) {
-      setName(sellerDetails.name);
-      setTitle(sellerDetails.title);
-      setDescription(sellerDetails.description);
-    }
-  }, [sellerDetails]);
-
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
   const [slotDuration, setSlotDuration] = useState(30);
-
-  const handleProfileSave = () => {
-    if (!sellerId) return;
-
-    const updatedSellers = sellers.map(s => 
-      s.id === sellerId ? { ...s, name, title, description } : s
-    );
-    setSellers(updatedSellers);
-
-    toast({
-      title: 'Profile Updated',
-      description: 'Your details have been saved successfully.',
-    });
-  };
 
   const generateSlots = () => {
     if (!selectedDate || !startTime || !endTime || !sellerId) {
@@ -125,29 +98,14 @@ export default function SellerDashboardPage() {
         <div className="space-y-8 md:col-span-1">
           <Card>
             <CardHeader>
-              <CardTitle>Edit Your Profile</CardTitle>
-              <CardDescription>Update your public information.</CardDescription>
+              <CardTitle>{sellerDetails?.name || 'Your Profile'}</CardTitle>
+              <CardDescription>{sellerDetails?.title || 'Your Title'}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-               <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Your Name" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="title">Title / Category</Label>
-                <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g., Dentist, Financial Advisor" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Tell buyers about your services" rows={4} />
-              </div>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                {sellerDetails?.description || 'Your description will appear here.'}
+              </p>
             </CardContent>
-            <CardFooter>
-              <Button onClick={handleProfileSave} className="w-full">
-                <Save className="mr-2 h-4 w-4" />
-                Save Profile
-              </Button>
-            </CardFooter>
           </Card>
 
           <Card>
@@ -240,5 +198,3 @@ export default function SellerDashboardPage() {
     </div>
   );
 }
-
-    

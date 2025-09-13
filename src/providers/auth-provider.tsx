@@ -70,16 +70,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (userDoc.exists()) {
             const userData = userDoc.data();
             const userRole = userData.role;
-            setUser({
+            const updatedUser = {
               uid: firebaseUser.uid,
               email: firebaseUser.email,
-              role: userRole,
-            });
+              role: userRole || null,
+            };
+            setUser(updatedUser);
 
             // Redirect if role is determined
-            if (userRole && (window.location.pathname === '/' || window.location.pathname === '/signup' || window.location.pathname === '/select-role')) {
-               router.push(`/dashboard/${userRole}`);
+            if (userRole) {
+                const currentPath = window.location.pathname;
+                if (currentPath === '/' || currentPath === '/signup' || currentPath === '/select-role') {
+                    router.push(`/dashboard/${userRole}`);
+                }
+                // Special case for new sellers who haven't onboarded
+                if (userRole === 'seller' && currentPath.includes('/dashboard/seller/onboarding')) {
+                    // Stay on the onboarding page
+                } else if (userRole === 'seller' && (!userData.name || !userData.title)) {
+                    // This is an approximation, the logic is now handled in select-role page
+                }
+
+            } else if (window.location.pathname !== '/select-role') {
+                 router.push('/select-role');
             }
+
+
           } else {
               // User exists in Auth, but not in Firestore (e.g., new user or Google sign-in)
               // Create the user document if it's a new sign-in

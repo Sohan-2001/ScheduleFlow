@@ -6,10 +6,15 @@ import { RoleSelection } from '@/components/auth/role-selection';
 import { Loader2 } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useLocalStorage } from '@/hooks/use-local-storage';
+import { sellers as initialSellers } from '@/lib/data';
+import type { Seller } from '@/lib/types';
+
 
 export default function SelectRolePage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const [sellers, setSellers] = useLocalStorage<Seller[]>('schedule-flow-sellers', []);
 
   useEffect(() => {
     // If user is not logged in or already has a role, redirect
@@ -22,7 +27,26 @@ export default function SelectRolePage() {
     if (!user) return;
     try {
       await setDoc(doc(db, 'users', user.uid), { role: role, email: user.email });
-      router.push(`/dashboard/${role}`);
+
+      if (role === 'seller') {
+        // If the user is a new seller, ensure their skeleton record exists
+        const sellerExists = sellers.some(s => s.id === user.uid);
+        if (!sellerExists) {
+            const newSeller: Seller = initialSellers.find(s => s.id === 'seller-1') 
+            ? { ...initialSellers.find(s => s.id === 'seller-1')!, id: user.uid, name: user.email || 'New Seller' }
+            : {
+                id: user.uid,
+                name: user.email || 'New Seller',
+                title: 'Professional',
+                description: 'Describe your services here.',
+                image: 'https://picsum.photos/seed/default/400/400',
+              };
+            setSellers([...sellers, newSeller]);
+        }
+        router.push(`/dashboard/seller/onboarding`);
+      } else {
+        router.push(`/dashboard/${role}`);
+      }
     } catch (error) {
         console.error("Error setting user role: ", error);
     }
