@@ -34,10 +34,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
+    // Request access to the user's calendar
+    provider.addScope('https://www.googleapis.com/auth/calendar.readonly');
+    provider.addScope('https://www.googleapis.com/auth/calendar.events');
+    
     try {
       const result = await signInWithPopup(auth, provider);
-      const firebaseUser = result.user;
-       // Firestore logic is handled by onAuthStateChanged
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential) {
+        // This gives you a Google Access Token. You can use it to access the Google API.
+        const accessToken = credential.accessToken;
+        // Store it in firestore for later use.
+        const userDocRef = doc(db, 'users', result.user.uid);
+        await setDoc(userDocRef, { accessToken }, { merge: true });
+      }
+      // Firestore user document creation/update is handled by onAuthStateChanged
     } catch (error) {
       console.error("Error during Google sign-in:", error);
       toast({
