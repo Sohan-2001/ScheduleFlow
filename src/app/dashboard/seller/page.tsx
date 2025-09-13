@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect } from 'react';
 import { useLocalStorage } from '@/hooks/use-local-storage';
@@ -8,25 +7,41 @@ import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { add, format, set } from 'date-fns';
-import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info } from 'lucide-react';
+import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info, Edit } from 'lucide-react';
 import type { Seller, TimeSlot } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/providers/auth-provider';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useRouter } from 'next/navigation';
 
 export default function SellerDashboardPage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  const router = useRouter();
   const [availability, setAvailability] = useLocalStorage<Record<string, TimeSlot[]>>('schedule-flow-availability', {});
-  const [sellers] = useLocalStorage<Seller[]>('schedule-flow-sellers', []);
+  const [sellerDetails, setSellerDetails] = useState<Seller | null>(null);
   
   const sellerId = user?.uid;
-  const sellerDetails = sellers.find(s => s.id === sellerId);
   const sellerAvailability = sellerId ? availability[sellerId] || [] : [];
   
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
   const [slotDuration, setSlotDuration] = useState(30);
+
+  useEffect(() => {
+    const fetchSellerDetails = async () => {
+      if (user) {
+        const sellerDocRef = doc(db, 'sellers', user.uid);
+        const docSnap = await getDoc(sellerDocRef);
+        if (docSnap.exists()) {
+          setSellerDetails({ id: docSnap.id, ...docSnap.data() } as Seller);
+        }
+      }
+    };
+    fetchSellerDetails();
+  }, [user]);
 
   const generateSlots = () => {
     if (!selectedDate || !startTime || !endTime || !sellerId) {
@@ -97,9 +112,14 @@ export default function SellerDashboardPage() {
       <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
         <div className="space-y-8 md:col-span-1">
           <Card>
-            <CardHeader>
-              <CardTitle>{sellerDetails?.name || 'Your Profile'}</CardTitle>
-              <CardDescription>{sellerDetails?.title || 'Your Title'}</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle>{sellerDetails?.name || 'Your Profile'}</CardTitle>
+                <CardDescription>{sellerDetails?.title || 'Your Title'}</CardDescription>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard/seller/onboarding')}>
+                <Edit className="h-4 w-4" />
+              </Button>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">

@@ -1,10 +1,8 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/providers/auth-provider';
-import { useLocalStorage } from '@/hooks/use-local-storage';
 import type { Seller } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,21 +11,39 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Save } from 'lucide-react';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export default function SellerOnboardingPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const [sellers, setSellers] = useLocalStorage<Seller[]>('schedule-flow-sellers', []);
   const { toast } = useToast();
-
-  const sellerDetails = user ? sellers.find(s => s.id === user.uid) : undefined;
   
-  const [name, setName] = useState(sellerDetails?.name || '');
-  const [title, setTitle] = useState(sellerDetails?.title || '');
-  const [description, setDescription] = useState(sellerDetails?.description || '');
+  const [name, setName] = useState('');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetching, setIsFetching] = useState(true);
 
-  if (authLoading) {
+  useEffect(() => {
+    const fetchSellerDetails = async () => {
+      if (user) {
+        setIsFetching(true);
+        const sellerDocRef = doc(db, 'sellers', user.uid);
+        const docSnap = await getDoc(sellerDocRef);
+        if (docSnap.exists()) {
+          const sellerData = docSnap.data() as Seller;
+          setName(sellerData.name || '');
+          setTitle(sellerData.title || '');
+          setDescription(sellerData.description || '');
+        }
+        setIsFetching(false);
+      }
+    };
+    fetchSellerDetails();
+  }, [user]);
+
+  if (authLoading || isFetching) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -40,26 +56,31 @@ export default function SellerOnboardingPage() {
     return null;
   }
   
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!user) return;
     setIsLoading(true);
 
-    const updatedSellers = sellers.map(s => 
-      s.id === user.uid 
-        ? { ...s, name, title, description } 
-        : s
-    );
-    
-    setSellers(updatedSellers);
+    try {
+        const sellerDocRef = doc(db, 'sellers', user.uid);
+        await setDoc(sellerDocRef, { name, title, description }, { merge: true });
 
-    toast({
-      title: 'Profile Saved!',
-      description: 'Your details have been saved successfully.',
-    });
+        toast({
+            title: 'Profile Saved!',
+            description: 'Your details have been saved successfully.',
+        });
 
-    setTimeout(() => {
-      router.push('/dashboard/seller');
-    }, 1000);
+        setTimeout(() => {
+            router.push('/dashboard/seller');
+        }, 1000);
+    } catch (error) {
+        console.error("Error saving seller details: ", error);
+        toast({
+            title: 'Error',
+            description: 'Could not save your details. Please try again.',
+            variant: 'destructive',
+        });
+        setIsLoading(false);
+    }
   };
 
   return (
