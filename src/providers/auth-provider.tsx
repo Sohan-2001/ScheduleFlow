@@ -7,8 +7,14 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { onAuthStateChanged, type User as FirebaseUser, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import {
+  onAuthStateChanged,
+  type User as FirebaseUser,
+  GoogleAuthProvider,
+  signInWithPopup,
+  linkWithPopup,
+} from 'firebase/auth';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import type { User } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -18,42 +24,59 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
+  isTokenMissing: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
   signInWithGoogle: async () => {},
+  isTokenMissing: true,
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isTokenMissing, setIsTokenMissing] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
 
-  const signInWithGoogle = async () => {
+  const handleGoogleAuth = async () => {
     const provider = new GoogleAuthProvider();
-    // Request access to the user's calendar
     provider.addScope('https://www.googleapis.com/auth/calendar.readonly');
     provider.addScope('https://www.googleapis.com/auth/calendar.events');
-    
+
     try {
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      if (credential) {
-        // This gives you a Google Access Token. You can use it to access the Google API.
-        const accessToken = credential.accessToken;
-        // Store it in firestore for later use.
-        const userDocRef = doc(db, 'users', result.user.uid);
-        await setDoc(userDocRef, { accessToken }, { merge: true });
+      const currentUser = auth.currentUser;
+      let result;
+      
+      // If user is already logged in (e.g., with email/password), link the Google account
+      if (currentUser && currentUser.providerData.every(p => p.providerId !== 'google.com')) {
+        result = await linkWithPopup(currentUser, provider);
+      } else {
+        // Otherwise, perform a standard sign-in
+        result = await signInWithPopup(auth, provider);
       }
-      // Firestore user document creation/update is handled by onAuthStateChanged
-    } catch (error) {
-      console.error("Error during Google sign-in:", error);
+      
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        const userDocRef = doc(db, 'users', result.user.uid);
+        await setDoc(userDocRef, { accessToken: credential.accessToken }, { merge: true });
+        setIsTokenMissing(false); // Token is now present
+        toast({
+          title: 'Calendar Connected!',
+          description: 'Your Google Calendar has been successfully linked.',
+        });
+      }
+    } catch (error: any) {
+      console.error("Error during Google authentication:", error);
+      let description = 'Could not authenticate with Google. Please try again.';
+      if (error.code === 'auth/credential-already-in-use') {
+        description = 'This Google account is already associated with another user.';
+      }
       toast({
-        title: 'Sign In Failed',
-        description: 'Could not sign in with Google. Please try again.',
+        title: 'Authentication Failed',
+        description,
         variant: 'destructive',
       });
       throw error;
@@ -77,27 +100,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             };
             setUser(updatedUser);
 
+            // Check for access token if user is a seller
+            if (userRole === 'seller') {
+              setIsTokenMissing(!userData.accessToken);
+            } else {
+              setIsTokenMissing(true); // Not relevant for buyers
+            }
+            
             // Redirect if role is determined
             if (userRole) {
                 const currentPath = window.location.pathname;
                 if (currentPath === '/' || currentPath === '/signup' || currentPath === '/select-role') {
                     router.push(`/dashboard/${userRole}`);
                 }
-                // Special case for new sellers who haven't onboarded
-                if (userRole === 'seller' && currentPath.includes('/dashboard/seller/onboarding')) {
-                    // Stay on the onboarding page
-                } else if (userRole === 'seller' && (!userData.name || !userData.title)) {
-                    // This is an approximation, the logic is now handled in select-role page
-                }
-
             } else if (window.location.pathname !== '/select-role') {
                  router.push('/select-role');
             }
 
 
           } else {
-              // User exists in Auth, but not in Firestore (e.g., new user or Google sign-in)
-              // Create the user document if it's a new sign-in
+              // New user, create the doc
               await setDoc(userDocRef, { email: firebaseUser.email }, { merge: true });
 
               setUser({
@@ -105,28 +127,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   email: firebaseUser.email,
                   role: null,
               });
-               if (window.location.pathname !== '/select-role') {
+              
+              if (window.location.pathname !== '/select-role') {
                   router.push('/select-role');
                }
           }
         } catch (error: any) {
-            if (error.code === 'permission-denied') {
-                console.error("Firestore permission denied. Please check your security rules.", error);
-                toast({
-                    title: 'Firestore Security Rules',
-                    description: "Permission denied. Please update your Firestore rules to allow reads/writes on the 'users' collection for authenticated users.",
-                    variant: 'destructive',
-                    duration: 10000,
-                });
-            } else {
-                console.error("Error fetching user data:", error);
-                toast({
-                    title: 'Error',
-                    description: 'Could not fetch user data.',
-                    variant: 'destructive',
-                });
-            }
-             // Keep user logged in, but with no role.
+            console.error("Error fetching user data:", error);
             setUser({
                 uid: firebaseUser.uid,
                 email: firebaseUser.email,
@@ -135,6 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } else {
         setUser(null);
+        setIsTokenMissing(true);
       }
       setLoading(false);
     });
@@ -143,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router, toast]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithGoogle }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle: handleGoogleAuth, isTokenMissing }}>
       {children}
     </AuthContext.Provider>
   );

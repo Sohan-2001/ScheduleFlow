@@ -49,11 +49,7 @@ export function SignIn() {
       await signInWithGoogle();
       // Redirect is handled by the AuthProvider
     } catch (error: any) {
-      toast({
-        title: 'Sign In Failed',
-        description: error.message,
-        variant: 'destructive',
-      });
+      // Error is handled in the provider, but we can stop loading
       setLoading(false);
     }
   }

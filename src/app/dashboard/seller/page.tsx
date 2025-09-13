@@ -6,7 +6,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { add, format, set } from 'date-fns';
-import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info, Edit } from 'lucide-react';
+import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info, Edit, AlertCircle } from 'lucide-react';
 import type { Seller, TimeSlot } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/providers/auth-provider';
@@ -14,10 +14,11 @@ import { doc, getDoc, collection, onSnapshot, writeBatch, Unsubscribe, deleteDoc
 import { db } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function SellerDashboardPage() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, isTokenMissing, signInWithGoogle } = useAuth();
   const router = useRouter();
   
   const [availability, setAvailability] = useState<TimeSlot[]>([]);
@@ -129,7 +130,6 @@ export default function SellerDashboardPage() {
       const batch = writeBatch(db);
       const availabilityCollectionRef = collection(db, 'sellers', user.uid, 'availability');
       newSlots.forEach(slotData => {
-        // Use a consistent and unique ID, e.g., combining user ID and start time
         const slotId = `${slotData.startTime}`;
         const slotDocRef = doc(availabilityCollectionRef, slotId);
         batch.set(slotDocRef, slotData);
@@ -161,6 +161,14 @@ export default function SellerDashboardPage() {
       toast({ title: "Error", description: "Could not remove the slot.", variant: "destructive" });
     }
   };
+  
+  const handleConnectCalendar = async () => {
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      // Error toast is handled in the auth provider
+    }
+  };
 
   const upcomingSlots = availability.filter(slot => new Date(slot.startTime) >= new Date());
 
@@ -174,6 +182,19 @@ export default function SellerDashboardPage() {
 
   return (
     <div className="container py-8">
+       {isTokenMissing && (
+        <Alert variant="destructive" className="mb-8">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Action Required: Connect Your Calendar</AlertTitle>
+          <AlertDescription>
+            Buyers can't book appointments with you until you connect your Google Calendar.
+            <Button onClick={handleConnectCalendar} variant="link" className="p-0 h-auto ml-2 text-destructive-foreground underline">
+              Connect now
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Seller Dashboard</h1>
         <p className="text-muted-foreground">Manage your profile and availability.</p>
@@ -224,7 +245,7 @@ export default function SellerDashboardPage() {
                  <Label>Slot Duration (minutes)</Label>
                  <Input type="number" value={slotDuration} onChange={e => setSlotDuration(parseInt(e.target.value))} min="15" step="15" />
               </div>
-              <Button onClick={generateSlots} className="w-full">
+              <Button onClick={generateSlots} className="w-full" disabled={isTokenMissing}>
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Generate Slots
               </Button>
