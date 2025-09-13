@@ -188,7 +188,7 @@ export default function SellerDashboardPage() {
           <AlertTitle>Action Required: Connect Your Calendar</AlertTitle>
           <AlertDescription>
             Buyers can't book appointments with you until you connect your Google Calendar.
-            <Button onClick={handleConnectCalendar} variant="link" className="p-0 h-auto ml-2 text-destructive-foreground underline">
+            <Button onClick={handleConnectCalendar} variant="link" className="p-0 h-auto ml-2 text-destructive underline font-bold">
               Connect now
             </Button>
           </AlertDescription>
