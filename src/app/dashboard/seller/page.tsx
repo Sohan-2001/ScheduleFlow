@@ -13,6 +13,7 @@ import { useAuth } from '@/providers/auth-provider';
 import { doc, getDoc, collection, onSnapshot, writeBatch, Unsubscribe, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function SellerDashboardPage() {
   const { toast } = useToast();
