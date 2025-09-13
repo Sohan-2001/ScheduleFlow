@@ -6,25 +6,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Calendar } from '@/components/ui/calendar';
 import { Input } from '@/components/ui/input';
 import { add, format, set, formatRelative } from 'date-fns';
-import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info } from 'lucide-react';
-import type { TimeSlot } from '@/lib/types';
+import { PlusCircle, Trash2, Calendar as CalendarIcon, Clock, User, Info, Briefcase, FileText, UserCircle } from 'lucide-react';
+import type { Seller, TimeSlot } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-
-// Simple mock user ID for a seller
-const SELLER_ID = 'seller-1';
+import { useAuth } from '@/providers/auth-provider';
+import { sellers } from '@/lib/data';
 
 export default function SellerDashboardPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [availability, setAvailability] = useLocalStorage<Record<string, TimeSlot[]>>('schedule-flow-availability', {});
-  const sellerAvailability = availability[SELLER_ID] || [];
-
+  
+  // Find the seller details that match the logged-in user's ID
+  const sellerDetails = sellers.find(s => s.id === user?.uid);
+  const sellerId = sellerDetails?.id || user?.uid;
+  const sellerAvailability = sellerId ? availability[sellerId] || [] : [];
+  
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('17:00');
   const [slotDuration, setSlotDuration] = useState(30);
 
   const generateSlots = () => {
-    if (!selectedDate || !startTime || !endTime) {
+    if (!selectedDate || !startTime || !endTime || !sellerId) {
       toast({
         title: 'Error',
         description: 'Please select a date and start/end times.',
@@ -51,7 +55,7 @@ export default function SellerDashboardPage() {
       if (slotEndTime > endDateTime) break;
 
       newSlots.push({
-        id: `${SELLER_ID}-${currentTime.toISOString()}`,
+        id: `${sellerId}-${currentTime.toISOString()}`,
         startTime: currentTime.toISOString(),
         endTime: slotEndTime.toISOString(),
         status: 'available',
@@ -63,7 +67,7 @@ export default function SellerDashboardPage() {
       (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
     );
 
-    setAvailability(prev => ({ ...prev, [SELLER_ID]: updatedAvailability }));
+    setAvailability(prev => ({ ...prev, [sellerId]: updatedAvailability }));
     toast({
       title: 'Success!',
       description: `${newSlots.length} slots added for ${format(selectedDate, 'PPP')}.`,
@@ -71,8 +75,9 @@ export default function SellerDashboardPage() {
   };
   
   const removeSlot = (slotId: string) => {
+    if (!sellerId) return;
     const updatedAvailability = sellerAvailability.filter(slot => slot.id !== slotId);
-    setAvailability(prev => ({ ...prev, [SELLER_ID]: updatedAvailability }));
+    setAvailability(prev => ({ ...prev, [sellerId]: updatedAvailability }));
     toast({
       title: 'Slot Removed',
       description: 'The time slot has been removed from your availability.',
@@ -87,6 +92,32 @@ export default function SellerDashboardPage() {
         <h1 className="text-3xl font-bold tracking-tight">Seller Dashboard</h1>
         <p className="text-muted-foreground">Manage your schedule and availability.</p>
       </div>
+
+      {sellerDetails && (
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Your Profile</CardTitle>
+            <CardDescription>This is how buyers see you on the platform.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-4">
+                <UserCircle className="h-6 w-6 text-muted-foreground" />
+                <p><span className="font-semibold">Name:</span> {sellerDetails.name}</p>
+            </div>
+            <div className="flex items-center gap-4">
+                <Briefcase className="h-6 w-6 text-muted-foreground" />
+                <p><span className="font-semibold">Title:</span> {sellerDetails.title}</p>
+            </div>
+            <div className="flex items-start gap-4">
+                <FileText className="h-6 w-6 text-muted-foreground flex-shrink-0" />
+                <div>
+                    <p className="font-semibold">Description:</p>
+                    <p className="text-muted-foreground">{sellerDetails.description}</p>
+                </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
         <div className="md:col-span-1">
