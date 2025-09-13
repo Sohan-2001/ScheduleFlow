@@ -14,9 +14,9 @@ export type Seller = {
 
 export type TimeSlot = {
   id: string;
-  startTime: string;
-  endTime: string;
+  startTime: string; // ISO 8601 format
+  endTime: string;   // ISO 8601 format
   status: 'available' | 'booked';
-  bookedBy?: string; // e.g. buyer's email or ID
-  bookedAt?: string; // ISO string
+  bookedBy?: string; // Buyer's email
+  bookedAt?: string; // ISO 8601 format timestamp of booking
 };

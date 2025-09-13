@@ -2,7 +2,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { CalendarCheck, Clock, CheckCircle, Loader2 } from 'lucide-react';
+import { CalendarCheck, Clock, CheckCircle, Loader2, Info } from 'lucide-react';
 import type { Seller, TimeSlot } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '../ui/scroll-area';
@@ -46,14 +46,14 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
 
   const handleBookSlot = async (slot: TimeSlot) => {
     if (!user || !user.email) {
-      toast({ title: 'Error', description: 'You must be logged in to book.', variant: 'destructive' });
+      toast({ title: 'Authentication Error', description: 'You must be logged in to book an appointment.', variant: 'destructive' });
       return;
     }
 
     setBookingSlotId(slot.id);
 
     try {
-      // Step 1: Create the Google Calendar event
+      // Step 1: Create the Google Calendar event via the server action
       const calResult = await scheduleEvent({
         sellerId: seller.id,
         buyerEmail: user.email,
@@ -64,10 +64,10 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
       });
 
       if (!calResult.success) {
-        throw new Error(calResult.error || 'Failed to create calendar event.');
+        throw new Error(calResult.error || 'Failed to create calendar event. The seller may need to grant calendar permissions.');
       }
 
-      // Step 2: Update the slot document in Firestore
+      // Step 2: Update the slot document in Firestore to mark it as booked
       const slotDocRef = doc(db, 'sellers', seller.id, 'availability', slot.id);
       const batch = writeBatch(db);
       batch.update(slotDocRef, {
@@ -78,17 +78,17 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
       await batch.commit();
 
 
-      // Step 3: Notify the user
+      // Step 3: Notify the user of success
       toast({
         title: 'Appointment Booked!',
-        description: `Your appointment with ${seller.name} is confirmed. An event has been added to your Google Calendar.`,
-        className: 'bg-green-100 dark:bg-green-900 border-green-400 dark:border-green-600',
+        description: `Your appointment with ${seller.name} is confirmed. A calendar invitation has been sent.`,
+        className: 'bg-green-100 dark:bg-green-900',
       });
 
       setIsOpen(false);
 
     } catch (error: any) {
-      console.error(error);
+      console.error("Booking failed:", error);
       toast({
         title: 'Booking Failed',
         description: error.message || 'Could not book the appointment. Please try again.',
@@ -104,11 +104,11 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Book an Appointment</DialogTitle>
+          <DialogTitle>Book with {seller.name}</DialogTitle>
           <DialogDescription>
-            Select an available time slot with {seller.name}.
+            Select an available time slot below. All times are in your local timezone.
           </DialogDescription>
         </DialogHeader>
         <ScrollArea className="max-h-[60vh] pr-4">
@@ -135,7 +135,7 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
                     variant="outline"
                     size="sm"
                     onClick={() => handleBookSlot(slot)}
-                    disabled={!user || isBooking}
+                    disabled={isBooking}
                   >
                     {bookingSlotId === slot.id ? (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -151,10 +151,16 @@ export function BookingModal({ isOpen, setIsOpen, seller }: BookingModalProps) {
                 <div className="flex flex-col items-center justify-center text-center text-muted-foreground py-10">
                     <CalendarCheck className="h-12 w-12 mb-4" />
                     <p className="font-semibold">No available slots</p>
-                    <p className="text-sm">{seller.name} doesn't have any open appointments right now.</p>
+                    <p className="text-sm">{seller.name} has no open appointments right now.</p>
                 </div>
             )}
         </ScrollArea>
+         <div className="flex items-start gap-3 rounded-lg border bg-muted p-3 text-muted-foreground">
+          <Info className="h-5 w-5 flex-shrink-0 mt-0.5" />
+          <p className="text-xs">
+            After booking, an invitation will be sent to your Google Calendar. You and the seller will both receive an invite with a Google Meet link.
+          </p>
+        </div>
       </DialogContent>
     </Dialog>
   );
