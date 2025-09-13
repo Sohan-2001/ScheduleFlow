@@ -29,9 +29,9 @@ async function getAccessToken(userId: string): Promise<string> {
   return userDoc.data()?.accessToken;
 }
 
-export const createCalendarEvent = ai.defineFlow(
+const createCalendarEventFlow = ai.defineFlow(
   {
-    name: 'createCalendarEvent',
+    name: 'createCalendarEventFlow',
     inputSchema: CreateCalendarEventInputSchema,
     outputSchema: z.void(),
   },
@@ -90,3 +90,7 @@ export const createCalendarEvent = ai.defineFlow(
     console.log('Event created:', responseData.htmlLink);
   }
 );
+
+export async function createCalendarEvent(input: CreateCalendarEventInput): Promise<void> {
+    return await createCalendarEventFlow(input);
+}
