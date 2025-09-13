@@ -3,26 +3,22 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Briefcase, ShoppingCart, Sparkles } from 'lucide-react';
-import type { User } from '@/lib/types';
 
 interface RoleSelectionProps {
-  setUser: (user: User) => void;
+  onSelectRole: (role: 'buyer' | 'seller') => void;
 }
 
-export function RoleSelection({ setUser }: RoleSelectionProps) {
-  const handleSelectRole = (role: 'buyer' | 'seller') => {
-    setUser({ role });
-  };
+export function RoleSelection({ onSelectRole }: RoleSelectionProps) {
 
   return (
     <div className="flex flex-col items-center gap-8 text-center">
       <div>
         <h1 className="flex items-center justify-center gap-3 text-4xl font-bold tracking-tight text-primary md:text-5xl">
           <Sparkles className="h-10 w-10" />
-          Welcome to ScheduleFlow
+          One Last Step!
         </h1>
         <p className="mt-4 max-w-xl text-lg text-muted-foreground">
-          The smartest way to connect and schedule. Are you here to offer your services or to book an appointment?
+          To personalize your experience, please tell us how you'll be using ScheduleFlow.
         </p>
       </div>
 
@@ -40,8 +36,8 @@ export function RoleSelection({ setUser }: RoleSelectionProps) {
             <p className="text-muted-foreground">
               Offer your services, manage your schedule, and connect with clients.
             </p>
-            <Button size="lg" className="w-full" onClick={() => handleSelectRole('seller')}>
-              Get Started as a Seller
+            <Button size="lg" className="w-full" onClick={() => onSelectRole('seller')}>
+              Continue as a Seller
             </Button>
           </CardContent>
         </Card>
@@ -58,8 +54,8 @@ export function RoleSelection({ setUser }: RoleSelectionProps) {
             <p className="text-muted-foreground">
               Find and book appointments with top professionals and services.
             </p>
-            <Button size="lg" className="w-full" variant="outline" onClick={() => handleSelectRole('buyer')}>
-              Get Started as a Buyer
+            <Button size="lg" className="w-full" variant="outline" onClick={() => onSelectRole('buyer')}>
+              Continue as a Buyer
             </Button>
           </CardContent>
         </Card>

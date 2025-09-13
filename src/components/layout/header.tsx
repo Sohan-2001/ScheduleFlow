@@ -1,15 +1,17 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { useLocalStorage } from '@/hooks/use-local-storage';
+import { useAuth } from '@/providers/auth-provider';
+import { signOut, getAuth } from 'firebase/auth';
 import { LogOut, Sparkles } from 'lucide-react';
 
 export function Header() {
   const router = useRouter();
-  const [user, setUser] = useLocalStorage('schedule-flow-user', null);
+  const { user } = useAuth();
+  const auth = getAuth();
 
-  const handleSignOut = () => {
-    setUser(null);
+  const handleSignOut = async () => {
+    await signOut(auth);
     router.push('/');
   };
 
@@ -18,7 +20,7 @@ export function Header() {
       <div className="container flex h-16 items-center justify-between">
         <div
           className="flex cursor-pointer items-center gap-2"
-          onClick={() => router.push('/')}
+          onClick={() => router.push(user ? `/dashboard/${user.role}`: '/')}
         >
           <Sparkles className="h-6 w-6 text-primary" />
           <h1 className="text-xl font-bold text-foreground">ScheduleFlow</h1>

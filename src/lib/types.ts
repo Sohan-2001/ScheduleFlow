@@ -1,5 +1,7 @@
 export type User = {
-  role: 'buyer' | 'seller';
+  uid: string;
+  email: string | null;
+  role: 'buyer' | 'seller' | null;
 };
 
 export type Seller = {
