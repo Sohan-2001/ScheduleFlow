@@ -7,8 +7,8 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged, type User as FirebaseUser, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import type { User } from '@/lib/types';
 import { useRouter } from 'next/navigation';
@@ -17,11 +17,13 @@ import { useToast } from '@/hooks/use-toast';
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  signInWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  signInWithGoogle: async () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -29,6 +31,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
+
+  const signInWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const firebaseUser = result.user;
+       // Firestore logic is handled by onAuthStateChanged
+    } catch (error) {
+      console.error("Error during Google sign-in:", error);
+      toast({
+        title: 'Sign In Failed',
+        description: 'Could not sign in with Google. Please try again.',
+        variant: 'destructive',
+      });
+      throw error;
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
@@ -51,7 +70,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                router.push(`/dashboard/${userRole}`);
             }
           } else {
-              // User exists in Auth, but not in Firestore (e.g., mid-signup)
+              // User exists in Auth, but not in Firestore (e.g., new user or Google sign-in)
+              // Create the user document if it's a new sign-in
+              await setDoc(userDocRef, { email: firebaseUser.email }, { merge: true });
+
               setUser({
                   uid: firebaseUser.uid,
                   email: firebaseUser.email,
@@ -66,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 console.error("Firestore permission denied. Please check your security rules.", error);
                 toast({
                     title: 'Firestore Security Rules',
-                    description: "Permission denied. Please update your Firestore rules to allow reads on the 'users' collection for authenticated users.",
+                    description: "Permission denied. Please update your Firestore rules to allow reads/writes on the 'users' collection for authenticated users.",
                     variant: 'destructive',
                     duration: 10000,
                 });
@@ -95,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router, toast]);
 
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={{ user, loading, signInWithGoogle }}>
       {children}
     </AuthContext.Provider>
   );
