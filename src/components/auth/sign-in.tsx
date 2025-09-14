@@ -29,11 +29,11 @@ export function SignIn() {
   }
 
   return (
-    <Card className="w-full max-w-sm">
+    <Card className="w-full max-w-sm border-none shadow-none sm:border-solid sm:shadow-sm">
       <CardHeader className="text-center">
-        <CardTitle className="text-2xl">Welcome!</CardTitle>
+        <CardTitle className="text-2xl">Get Started</CardTitle>
         <CardDescription>
-          Sign in or create an account to get started.
+          Sign in or create an account with Google.
         </CardDescription>
       </CardHeader>
       <CardContent>
