@@ -45,6 +45,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const provider = new GoogleAuthProvider();
     provider.addScope('https://www.googleapis.com/auth/calendar.readonly');
     provider.addScope('https://www.googleapis.com/auth/calendar.events');
+    // Request offline access to get a refresh token
+    provider.setCustomParameters({
+      access_type: 'offline',
+      prompt: 'consent', // Important to re-prompt for consent to get a refresh token
+    });
+
 
     try {
       const currentUser = auth.currentUser;
@@ -61,6 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         const userDocRef = doc(db, 'users', result.user.uid);
+        // Note: In a production app, the refresh token should be stored securely on a server,
+        // not directly in Firestore. This is a simplified flow.
         await setDoc(userDocRef, { accessToken: credential.accessToken }, { merge: true });
         setIsTokenMissing(false); // Token is now present
         toast({
