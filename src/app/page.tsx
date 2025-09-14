@@ -13,10 +13,10 @@ export default function HomePage() {
             ScheduleFlow
           </h1>
         </div>
-        <p className="max-w-xl text-lg text-muted-foreground">
-          The effortless way to connect professionals with clients. Sign in to
-          get started.
-        </p>
+        <div className="max-w-xl text-lg text-muted-foreground">
+          <p>The effortless way to connect professionals with clients.</p>
+          <p>Sign in to get started.</p>
+        </div>
         <SignIn />
       </div>
     </main>
