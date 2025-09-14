@@ -1,4 +1,4 @@
-# ScheduleFlow
+# ScheduleFlow - Live at https://scheduleflow.vercel.app
 
 ScheduleFlow is a modern, AI-enhanced web application that connects professionals (Sellers) with clients (Buyers), allowing them to book appointments seamlessly. It leverages Google Calendar for real-time availability and scheduling, and uses generative AI to provide smart recommendations.
 
