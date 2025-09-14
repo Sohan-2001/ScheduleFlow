@@ -45,7 +45,7 @@ export default function BuyerDashboardPage() {
   );
 
   return (
-    <div className="container py-8">
+    <div className="container py-4 md:py-8">
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-bold tracking-tight">Find Your Expert</h1>
         <p className="mx-auto max-w-2xl text-muted-foreground">

@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Calendar } from '@/components/ui/calendar';
@@ -15,6 +15,7 @@ import { db } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Loader2 } from 'lucide-react';
 
 export default function SellerDashboardPage() {
   const { toast } = useToast();
@@ -174,21 +175,21 @@ export default function SellerDashboardPage() {
 
   if (loading) {
     return (
-      <div className="container py-8 text-center">
-        <p className="text-muted-foreground">Loading your dashboard...</p>
+      <div className="container flex h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="container py-8">
+    <div className="container py-4 md:py-8">
        {isTokenMissing && (
         <Alert variant="destructive" className="mb-8">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Action Required: Connect Your Calendar</AlertTitle>
           <AlertDescription>
             Buyers can't book appointments with you until you connect your Google Calendar.
-            <Button onClick={handleConnectCalendar} variant="link" className="p-0 h-auto ml-2 text-destructive underline font-bold">
+            <Button onClick={handleConnectCalendar} variant="link" className="p-0 h-auto ml-2 text-destructive-foreground underline font-bold">
               Connect now
             </Button>
           </AlertDescription>
@@ -200,8 +201,8 @@ export default function SellerDashboardPage() {
         <p className="text-muted-foreground">Manage your profile and availability.</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-        <div className="space-y-8 md:col-span-1">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <div className="space-y-8 lg:col-span-1">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <div>
@@ -226,13 +227,15 @@ export default function SellerDashboardPage() {
               <CardDescription>Add new time slots for buyers to book.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={setSelectedDate}
-                className="rounded-md border"
-                disabled={(date) => date < new Date(new Date().toDateString())}
-              />
+              <div className="flex justify-center">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={setSelectedDate}
+                    className="rounded-md border"
+                    disabled={(date) => date < new Date(new Date().toDateString())}
+                  />
+              </div>
               <div className="space-y-2">
                 <Label>Time Range</Label>
                 <div className="flex items-center gap-2">
@@ -253,7 +256,7 @@ export default function SellerDashboardPage() {
           </Card>
         </div>
 
-        <div className="md:col-span-2">
+        <div className="lg:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle>Your Upcoming Slots</CardTitle>
@@ -261,11 +264,11 @@ export default function SellerDashboardPage() {
             </CardHeader>
             <CardContent>
               {upcomingSlots.length > 0 ? (
-                <ScrollArea className="h-[70vh]">
+                <ScrollArea className="h-[70vh] max-h-[70vh]">
                   <ul className="space-y-3 pr-4">
                     {upcomingSlots.map((slot) => (
                       <li key={slot.id} className={`rounded-lg border p-4 ${slot.status === 'booked' ? 'bg-muted' : ''}`}>
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <p className="font-semibold flex items-center gap-2">
                               <CalendarIcon className="h-4 w-4 text-muted-foreground" />
@@ -276,7 +279,7 @@ export default function SellerDashboardPage() {
                               {format(new Date(slot.startTime), 'p')} - {format(new Date(slot.endTime), 'p')}
                             </p>
                           </div>
-                          <Button variant="ghost" size="icon" onClick={() => removeSlot(slot.id)} disabled={slot.status === 'booked'}>
+                          <Button variant="ghost" size="icon" onClick={() => removeSlot(slot.id)} disabled={slot.status === 'booked'} className="self-end sm:self-center">
                             <Trash2 className="h-4 w-4" />
                             <span className="sr-only">Remove Slot</span>
                           </Button>
@@ -306,7 +309,10 @@ export default function SellerDashboardPage() {
                   </ul>
                 </ScrollArea>
               ) : (
-                <p className="text-center text-muted-foreground py-8">You have no upcoming slots. Add some availability to get started!</p>
+                <div className="text-center py-8 text-muted-foreground">
+                  <p>You have no upcoming slots.</p>
+                  <p>Add some availability to get started!</p>
+                </div>
               )}
             </CardContent>
           </Card>
